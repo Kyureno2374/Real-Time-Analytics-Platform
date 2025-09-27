@@ -1,0 +1,99 @@
+kafka:
+  # Broker configuration
+  brokers:
+    - "localhost:9092"
+  
+  # Topics configuration
+  topics:
+    events: "analytics-events"
+    metrics: "metrics-data"
+    dlq: "analytics-events-dlq"
+    processed: "analytics-events-processed"
+  
+  # Producer configuration
+  producer:
+    # Batching settings
+    batch_size: 16384              # 16KB
+    batch_timeout_ms: 5
+    max_message_bytes: 1048576     # 1MB
+    flush_frequency_ms: 1000
+    
+    # Reliability settings
+    required_acks: "all"           # -1 = all replicas
+    max_retries: 5
+    retry_backoff_ms: 100
+    enable_idempotence: true
+    
+    # Compression
+    compression_type: "snappy"     # gzip, snappy, lz4, zstd
+    
+    # Performance tuning
+    linger_ms: 5                   # Wait time for batching
+    buffer_memory: 33554432        # 32MB
+    send_buffer_bytes: 131072      # 128KB
+    receive_buffer_bytes: 65536    # 64KB
+  
+  # Consumer configuration
+  consumer:
+    # Group settings
+    group_id: "analytics-consumer-group"
+    session_timeout_ms: 30000      # 30 seconds
+    heartbeat_interval_ms: 3000    # 3 seconds
+    max_processing_time_ms: 120000 # 2 minutes
+    
+    # Fetch settings
+    fetch_min_bytes: 1024          # 1KB
+    fetch_max_wait_ms: 500
+    max_poll_records: 500
+    
+    # Offset management
+    auto_commit: true
+    auto_commit_interval_ms: 1000
+    offset_reset: "earliest"       # earliest, latest
+    
+    # Retry settings
+    enable_retry: true
+    max_retries: 3
+    retry_delay_ms: 1000
+    retry_backoff_multiplier: 2.0
+    
+    # Dead Letter Queue
+    enable_dlq: true
+    dlq_topic: "analytics-events-dlq"
+    
+    # Processing tuning
+    concurrency: 3                 # Number of worker goroutines
+    buffer_size: 1000             # Message buffer size
+
+  # Stream processing configuration
+  streams:
+    enable_deduplication: true
+    deduplication_window_ms: 300000  # 5 minutes
+    
+    enable_aggregation: true
+    aggregation_window_ms: 60000     # 1 minute
+    aggregation_threshold: 10        # Events per window
+    
+    enable_filtering: true
+    filter_low_importance: true
+    
+    # State store settings
+    state_cleanup_interval_ms: 30000 # 30 seconds
+    max_state_entries: 10000
+
+  # Advanced settings
+  advanced:
+    # Connection settings
+    connection_max_idle_ms: 540000   # 9 minutes
+    request_timeout_ms: 30000        # 30 seconds
+    
+    # Security (if needed)
+    security_protocol: "PLAINTEXT"   # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+    # ssl_ca_location: "/path/to/ca-cert"
+    # ssl_certificate_location: "/path/to/client-cert"
+    # ssl_key_location: "/path/to/client-key"
+    
+    # Monitoring
+    metrics_recording_level: "INFO"  # DEBUG, INFO, WARN
+    metrics_sample_window_ms: 30000  # 30 seconds
+    metrics_num_samples: 2 

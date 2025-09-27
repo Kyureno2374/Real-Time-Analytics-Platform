@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - analytics-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      KAFKA_CONFLUENT_METRICS_ENABLE: 'true'
+      KAFKA_CONFLUENT_SUPPORT_CUSTOMER_ID: anonymous
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_DELETE_TOPIC_ENABLE: 'true'
+    networks:
+      - analytics-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - analytics-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana/dashboard-files:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - analytics-network
+
+  producer-service:
+    build:
+      context: .
+      dockerfile: ./services/producer/Dockerfile
+    container_name: producer-service
+    ports:
+      - "8081:8081"
+      - "50051:50051"
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+      - GRPC_PORT=50051
+      - HTTP_PORT=8081
+      - LOG_LEVEL=info
+    depends_on:
+      - kafka
+    networks:
+      - analytics-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  consumer-service:
+    build:
+      context: .
+      dockerfile: ./services/consumer/Dockerfile
+    container_name: consumer-service
+    ports:
+      - "8082:8082"
+      - "50052:50052"
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+      - GRPC_PORT=50052
+      - HTTP_PORT=8082
+      - CONSUMER_GROUP_ID=analytics-consumer-group
+      - LOG_LEVEL=info
+    depends_on:
+      - kafka
+    networks:
+      - analytics-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./services/analytics/Dockerfile
+    container_name: analytics-service
+    ports:
+      - "8083:8083"
+      - "50053:50053"
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+      - GRPC_PORT=50053
+      - HTTP_PORT=8083
+    depends_on:
+      - kafka
+      - consumer-service
+    networks:
+      - analytics-network
+
+networks:
+  analytics-network:
+    driver: bridge 

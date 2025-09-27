@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  labels:
+    app: analytics-service
+    component: analytics-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      containers:
+      - name: analytics
+        image: analytics-platform/analytics:latest
+        ports:
+        - containerPort: 8083
+          name: http
+        - containerPort: 50053
+          name: grpc
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka:9092"
+        - name: GRPC_PORT
+          value: "50053"
+        - name: HTTP_PORT
+          value: "8083"
+        - name: LOG_LEVEL
+          value: "info"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  labels:
+    app: analytics-service
+spec:
+  ports:
+  - port: 8083
+    targetPort: 8083
+    name: http
+  - port: 50053
+    targetPort: 50053
+    name: grpc
+  selector:
+    app: analytics-service
+  type: LoadBalancer 

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-service
+  labels:
+    app: consumer-service
+    component: analytics-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: consumer-service
+  template:
+    metadata:
+      labels:
+        app: consumer-service
+    spec:
+      containers:
+      - name: consumer
+        image: analytics-platform/consumer:latest
+        ports:
+        - containerPort: 8082
+          name: http
+        - containerPort: 50052
+          name: grpc
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka:9092"
+        - name: GRPC_PORT
+          value: "50052"
+        - name: HTTP_PORT
+          value: "8082"
+        - name: LOG_LEVEL
+          value: "info"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consumer-service
+  labels:
+    app: consumer-service
+spec:
+  ports:
+  - port: 8082
+    targetPort: 8082
+    name: http
+  - port: 50052
+    targetPort: 50052
+    name: grpc
+  selector:
+    app: consumer-service
+  type: ClusterIP 

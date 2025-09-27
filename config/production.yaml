@@ -1,0 +1,77 @@
+kafka:
+  brokers:
+    - "kafka-broker-1:9092"
+    - "kafka-broker-2:9092" 
+    - "kafka-broker-3:9092"
+  topic_events: "analytics-events"
+  topic_metrics: "metrics-data"
+  consumer_group_id: "analytics-consumer-group-prod"
+  partition_strategy: "hash"
+  
+  # Production tuning
+  producer:
+    batch_size: 32768              # 32KB for higher throughput
+    batch_timeout_ms: 10           # Slightly higher for better batching
+    max_message_bytes: 2097152     # 2MB for larger messages
+    flush_frequency_ms: 500        # More frequent flushes
+    required_acks: "all"           # Ensure durability
+    max_retries: 10                # More retries for production
+    retry_backoff_ms: 200
+    enable_idempotence: true
+    compression_type: "lz4"        # Fast compression for production
+    
+  consumer:
+    # Basic settings
+    group_id: "analytics-consumer-group-prod"
+    session_timeout_ms: 45000      # 45 seconds
+    heartbeat_interval_ms: 3000    # 3 seconds  
+    max_processing_time_ms: 300000 # 5 minutes for complex processing
+    
+    # Fetch optimization
+    fetch_min_bytes: 4096          # 4KB
+    fetch_max_wait_ms: 100         # Faster response
+    max_poll_records: 200          # Smaller batches for better latency
+    
+    # Offset management  
+    auto_commit: false             # Disable for manual control
+    enable_manual_commit: true     # Enable manual offset management
+    commit_interval_ms: 2000       # Commit every 2 seconds
+    offset_reset: "earliest"
+    
+    # Retry and DLQ
+    enable_retry: true
+    max_retries: 5                 # More retries for production
+    retry_delay_ms: 2000           # 2 seconds
+    retry_backoff_multiplier: 2.0
+    enable_dlq: true
+    dlq_topic: "analytics-events-dlq-prod"
+    
+    # Backpressure handling
+    enable_backpressure: true
+    max_concurrent_messages: 100   # Higher for production
+    message_buffer_size: 2000      # Larger buffer  
+    max_processing_rate: 500.0     # messages per second
+    
+grpc:
+  port: "50052"
+
+http:
+  port: "8082"
+
+prometheus:
+  enabled: true
+  path: "/metrics"
+  port: "9090"
+
+service:
+  name: "analytics-consumer-service"
+  environment: "production"
+  log_level: "info"
+  
+# Monitoring and alerting
+monitoring:
+  health_check_interval: 30
+  metrics_reporting_interval: 10
+  lag_threshold_warning: 1000
+  lag_threshold_critical: 5000
+  error_rate_threshold: 0.05     # 5% error rate threshold 

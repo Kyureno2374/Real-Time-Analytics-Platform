@@ -1,0 +1,22 @@
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic_events: "analytics-events"
+  topic_metrics: "metrics-data"
+  consumer_group_id: "analytics-consumer-group"
+  partition_strategy: "hash"
+
+grpc:
+  port: "50051"
+
+http:
+  port: "8081"
+
+prometheus:
+  enabled: true
+  path: "/metrics"
+
+service:
+  name: "analytics-service"
+  environment: "development"
+  log_level: "info" 

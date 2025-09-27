@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package analytics;
+
+option go_package = "real-time-analytics-platform/api/proto";
+
+// Event represents an analytics event
+message Event {
+  string id = 1;
+  string user_id = 2;
+  string event_type = 3;
+  map<string, string> properties = 4;
+  int64 timestamp = 5;
+  string source = 6;
+}
+
+// Metric represents a processed metric
+message Metric {
+  string name = 1;
+  double value = 2;
+  map<string, string> labels = 3;
+  int64 timestamp = 4;
+}
+
+// Analytics summary response
+message AnalyticsSummary {
+  int64 total_events = 1;
+  int64 total_users = 2;
+  map<string, int64> events_by_type = 3;
+  repeated Metric top_metrics = 4;
+  int64 last_updated = 5;
+}
+
+// Producer Service
+service ProducerService {
+  rpc SendEvent(Event) returns (EventResponse);
+  rpc SendBatchEvents(BatchEventsRequest) returns (BatchEventsResponse);
+  rpc GetProducerHealth(HealthRequest) returns (HealthResponse);
+}
+
+message EventResponse {
+  bool success = 1;
+  string message = 2;
+  string event_id = 3;
+}
+
+message BatchEventsRequest {
+  repeated Event events = 1;
+}
+
+message BatchEventsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 processed_count = 3;
+  repeated string failed_event_ids = 4;
+}
+
+// Consumer Service
+service ConsumerService {
+  rpc GetConsumerHealth(HealthRequest) returns (HealthResponse);
+  rpc GetConsumerStats(ConsumerStatsRequest) returns (ConsumerStatsResponse);
+}
+
+message ConsumerStatsRequest {}
+
+message ConsumerStatsResponse {
+  int64 processed_events = 1;
+  int64 failed_events = 2;
+  double events_per_second = 3;
+  int64 last_processed = 4;
+}
+
+// Analytics Service
+service AnalyticsService {
+  rpc GetAnalyticsSummary(AnalyticsSummaryRequest) returns (AnalyticsSummary);
+  rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+  rpc GetAnalyticsHealth(HealthRequest) returns (HealthResponse);
+}
+
+message AnalyticsSummaryRequest {
+  int64 from = 1;
+  int64 to = 2;
+}
+
+message MetricsRequest {
+  string metric_name = 1;
+  int64 from = 2;
+  int64 to = 3;
+  map<string, string> filters = 4;
+}
+
+message MetricsResponse {
+  repeated Metric metrics = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Common messages
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  int64 timestamp = 3;
+} 

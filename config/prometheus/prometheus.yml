@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'producer-service'
+    static_configs:
+      - targets: ['producer-service:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'consumer-service'
+    static_configs:
+      - targets: ['consumer-service:8082']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8083']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka:9101']
+    scrape_interval: 30s 

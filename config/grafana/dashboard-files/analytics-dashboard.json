@@ -1,0 +1,115 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Real-Time Analytics Dashboard",
+    "tags": ["analytics", "kafka", "realtime"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Events per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(events_processed_total[1m])",
+            "format": "time_series",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Events/sec",
+            "show": true
+          }
+        ],
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Events Processed",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(events_processed_total)",
+            "format": "time_series"
+          }
+        ],
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Kafka Consumer Lag",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag_total",
+            "format": "time_series",
+            "legendFormat": "{{topic}}"
+          }
+        ],
+        "gridPos": {
+          "h": 9,
+          "w": 24,
+          "x": 0,
+          "y": 9
+        }
+      },
+      {
+        "id": 4,
+        "title": "Service Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up",
+            "format": "time_series",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 18
+        }
+      },
+      {
+        "id": 5,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(errors_total[5m])",
+            "format": "time_series",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 18
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s",
+    "schemaVersion": 16,
+    "version": 0
+  }
+} 
