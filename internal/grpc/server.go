@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	"real-time-analytics-platform/internal/metrics"
@@ -21,9 +22,11 @@ type Server struct {
 }
 
 type ServerConfig struct {
-	Port    string
-	Logger  *logrus.Logger
-	Metrics *metrics.MetricsCollector
+	Port             string
+	Logger           *logrus.Logger
+	Metrics          *metrics.MetricsCollector
+	EnableAuth       bool
+	EnableReflection bool
 }
 
 func NewServer(config *ServerConfig) (*Server, error) {
@@ -38,11 +41,45 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		metrics:  config.Metrics,
 	}
 
-	// Create gRPC server with interceptors
+	// Create interceptors
+	recoveryInterceptor := NewRecoveryInterceptor(config.Logger)
+	loggingInterceptor := NewLoggingInterceptor(config.Logger)
+	metricsInterceptor := NewMetricsInterceptor(config.Metrics)
+
+	// Chain unary interceptors
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		recoveryInterceptor.Unary(),
+		loggingInterceptor.Unary(),
+		metricsInterceptor.Unary(),
+	}
+
+	// Chain stream interceptors
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		recoveryInterceptor.Stream(),
+		loggingInterceptor.Stream(),
+		metricsInterceptor.Stream(),
+	}
+
+	// Add auth interceptor if enabled
+	if config.EnableAuth {
+		authInterceptor := NewAuthInterceptor(config.Logger)
+		unaryInterceptors = append([]grpc.UnaryServerInterceptor{authInterceptor.Unary()}, unaryInterceptors...)
+		streamInterceptors = append([]grpc.StreamServerInterceptor{authInterceptor.Stream()}, streamInterceptors...)
+	}
+
+	// Create gRPC server with chained interceptors
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(server.unaryInterceptor),
-		grpc.StreamInterceptor(server.streamInterceptor),
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+		grpc.MaxRecvMsgSize(10*1024*1024), // 10MB
+		grpc.MaxSendMsgSize(10*1024*1024), // 10MB
 	)
+
+	// Enable reflection if requested
+	if config.EnableReflection {
+		reflection.Register(grpcServer)
+		config.Logger.Info("gRPC reflection enabled")
+	}
 
 	server.grpcServer = grpcServer
 

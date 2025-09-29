@@ -19,9 +19,24 @@ clean:
 
 # Generate protobuf files
 proto:
-	protoc --go_out=. --go_opt=paths=source_relative \
+	@echo "Generating protobuf files..."
+	protoc -I. -I./api/proto -I./third_party \
+		--go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		api/proto/*.proto
+		--grpc-gateway_out=. --grpc-gateway_opt=paths=source_relative \
+		--grpc-gateway_opt=generate_unbound_methods=true \
+		--validate_out=lang=go,paths=source_relative:. \
+		api/proto/analytics.proto
+	@echo "Protobuf files generated successfully"
+
+# Install proto tools
+proto-tools:
+	@echo "Installing protobuf tools..."
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+	go install github.com/envoyproxy/protoc-gen-validate@latest
+	@echo "Protobuf tools installed successfully"
 
 # Run tests
 test:

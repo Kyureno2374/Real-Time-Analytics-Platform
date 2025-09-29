@@ -1,105 +1,565 @@
 syntax = "proto3";
 
-package analytics;
+package analytics.v1;
 
-option go_package = "real-time-analytics-platform/api/proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "validate/validate.proto";
 
-// Event represents an analytics event
+option go_package = "real-time-analytics-platform/api/proto/v1;analyticsv1";
+
+// ===================== Event Types =====================
+
+// Base Event structure
 message Event {
-  string id = 1;
-  string user_id = 2;
-  string event_type = 3;
-  map<string, string> properties = 4;
-  int64 timestamp = 5;
+  string id = 1 [(validate.rules).string.uuid = true];
+  string user_id = 2 [(validate.rules).string.min_len = 1];
+  string session_id = 3;
+  EventType event_type = 4 [(validate.rules).enum.defined_only = true];
+  google.protobuf.Timestamp timestamp = 5 [(validate.rules).timestamp.required = true];
   string source = 6;
+  map<string, string> properties = 7;
+  
+  oneof event_data {
+    UserEvent user_event = 10;
+    TransactionEvent transaction_event = 11;
+    SystemEvent system_event = 12;
+    CustomEvent custom_event = 13;
+  }
 }
 
-// Metric represents a processed metric
-message Metric {
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_USER = 1;
+  EVENT_TYPE_TRANSACTION = 2;
+  EVENT_TYPE_SYSTEM = 3;
+  EVENT_TYPE_CUSTOM = 4;
+}
+
+// User Event
+message UserEvent {
+  string action = 1 [(validate.rules).string.min_len = 1];
+  string page_url = 2;
+  string referrer = 3;
+  string user_agent = 4;
+  string ip_address = 5;
+  map<string, string> metadata = 6;
+  UserContext user_context = 7;
+}
+
+message UserContext {
+  string device_type = 1;
+  string browser = 2;
+  string os = 3;
+  string country = 4;
+  string city = 5;
+  bool is_new_user = 6;
+}
+
+// Transaction Event
+message TransactionEvent {
+  string transaction_id = 1 [(validate.rules).string.min_len = 1];
+  TransactionType type = 2;
+  double amount = 3 [(validate.rules).double.gte = 0];
+  string currency = 4 [(validate.rules).string.len = 3];
+  TransactionStatus status = 5;
+  string payment_method = 6;
+  repeated TransactionItem items = 7;
+  TransactionMetadata metadata = 8;
+}
+
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  TRANSACTION_TYPE_PURCHASE = 1;
+  TRANSACTION_TYPE_REFUND = 2;
+  TRANSACTION_TYPE_SUBSCRIPTION = 3;
+  TRANSACTION_TYPE_TRANSFER = 4;
+}
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_PENDING = 1;
+  TRANSACTION_STATUS_COMPLETED = 2;
+  TRANSACTION_STATUS_FAILED = 3;
+  TRANSACTION_STATUS_CANCELLED = 4;
+}
+
+message TransactionItem {
+  string item_id = 1;
+  string name = 2;
+  string category = 3;
+  double price = 4;
+  int32 quantity = 5;
+}
+
+message TransactionMetadata {
+  string merchant_id = 1;
+  string store_id = 2;
+  string campaign_id = 3;
+  map<string, string> custom_fields = 4;
+}
+
+// System Event
+message SystemEvent {
+  string component = 1;
+  SystemEventType type = 2;
+  SystemSeverity severity = 3;
+  string message = 4;
+  map<string, string> tags = 5;
+  SystemMetrics metrics = 6;
+}
+
+enum SystemEventType {
+  SYSTEM_EVENT_TYPE_UNSPECIFIED = 0;
+  SYSTEM_EVENT_TYPE_ERROR = 1;
+  SYSTEM_EVENT_TYPE_WARNING = 2;
+  SYSTEM_EVENT_TYPE_INFO = 3;
+  SYSTEM_EVENT_TYPE_METRIC = 4;
+}
+
+enum SystemSeverity {
+  SYSTEM_SEVERITY_UNSPECIFIED = 0;
+  SYSTEM_SEVERITY_LOW = 1;
+  SYSTEM_SEVERITY_MEDIUM = 2;
+  SYSTEM_SEVERITY_HIGH = 3;
+  SYSTEM_SEVERITY_CRITICAL = 4;
+}
+
+message SystemMetrics {
+  double cpu_usage = 1;
+  double memory_usage = 2;
+  double disk_usage = 3;
+  int32 active_connections = 4;
+  double response_time = 5;
+}
+
+// Custom Event
+message CustomEvent {
+  string name = 1 [(validate.rules).string.min_len = 1];
+  string category = 2;
+  map<string, string> attributes = 3;
+  repeated CustomMetric metrics = 4;
+}
+
+message CustomMetric {
   string name = 1;
   double value = 2;
-  map<string, string> labels = 3;
-  int64 timestamp = 4;
+  string unit = 3;
 }
 
-// Analytics summary response
-message AnalyticsSummary {
-  int64 total_events = 1;
-  int64 total_users = 2;
-  map<string, int64> events_by_type = 3;
-  repeated Metric top_metrics = 4;
-  int64 last_updated = 5;
+// ===================== Metrics =====================
+
+message Metric {
+  string name = 1 [(validate.rules).string.min_len = 1];
+  MetricType type = 2;
+  double value = 3;
+  map<string, string> labels = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string unit = 6;
+  MetricMetadata metadata = 7;
 }
 
-// Producer Service
-service ProducerService {
-  rpc SendEvent(Event) returns (EventResponse);
-  rpc SendBatchEvents(BatchEventsRequest) returns (BatchEventsResponse);
-  rpc GetProducerHealth(HealthRequest) returns (HealthResponse);
+enum MetricType {
+  METRIC_TYPE_UNSPECIFIED = 0;
+  METRIC_TYPE_COUNTER = 1;
+  METRIC_TYPE_GAUGE = 2;
+  METRIC_TYPE_HISTOGRAM = 3;
+  METRIC_TYPE_SUMMARY = 4;
 }
 
-message EventResponse {
+message MetricMetadata {
+  string description = 1;
+  repeated string tags = 2;
+  double sample_rate = 3;
+}
+
+// ===================== Analytics Services =====================
+
+// Event Ingestion Service
+service EventIngestionService {
+  // Ingest single event
+  rpc IngestEvent(IngestEventRequest) returns (IngestEventResponse) {
+    option (google.api.http) = {
+      post: "/v1/events"
+      body: "event"
+    };
+  }
+  
+  // Ingest batch of events
+  rpc IngestEvents(IngestEventsRequest) returns (IngestEventsResponse) {
+    option (google.api.http) = {
+      post: "/v1/events/batch"
+      body: "*"
+    };
+  }
+  
+  // Stream events (bidirectional)
+  rpc StreamEvents(stream StreamEventsRequest) returns (stream StreamEventsResponse);
+  
+  // Health check
+  rpc Health(google.protobuf.Empty) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/v1/events/health"
+    };
+  }
+}
+
+message IngestEventRequest {
+  Event event = 1 [(validate.rules).message.required = true];
+  IngestOptions options = 2;
+}
+
+message IngestEventsRequest {
+  repeated Event events = 1 [(validate.rules).repeated.min_items = 1, (validate.rules).repeated.max_items = 1000];
+  IngestOptions options = 2;
+}
+
+message IngestOptions {
+  bool async = 1;
+  int32 timeout_seconds = 2;
+  bool validate_only = 3;
+}
+
+message IngestEventResponse {
   bool success = 1;
-  string message = 2;
-  string event_id = 3;
+  string event_id = 2;
+  string message = 3;
+  repeated ValidationError validation_errors = 4;
+  IngestMetadata metadata = 5;
 }
 
-message BatchEventsRequest {
-  repeated Event events = 1;
-}
-
-message BatchEventsResponse {
+message IngestEventsResponse {
   bool success = 1;
-  string message = 2;
-  int32 processed_count = 3;
+  int32 processed_count = 2;
+  int32 failed_count = 3;
   repeated string failed_event_ids = 4;
+  repeated ValidationError validation_errors = 5;
+  IngestMetadata metadata = 6;
 }
 
-// Consumer Service
-service ConsumerService {
-  rpc GetConsumerHealth(HealthRequest) returns (HealthResponse);
-  rpc GetConsumerStats(ConsumerStatsRequest) returns (ConsumerStatsResponse);
+message StreamEventsRequest {
+  oneof request {
+    Event event = 1;
+    StreamConfig config = 2;
+  }
 }
 
-message ConsumerStatsRequest {}
+message StreamEventsResponse {
+  oneof response {
+    IngestEventResponse event_response = 1;
+    StreamStatus status = 2;
+  }
+}
 
-message ConsumerStatsResponse {
-  int64 processed_events = 1;
-  int64 failed_events = 2;
-  double events_per_second = 3;
-  int64 last_processed = 4;
+message StreamConfig {
+  int32 batch_size = 1;
+  google.protobuf.Duration flush_interval = 2;
+}
+
+message StreamStatus {
+  bool connected = 1;
+  int32 pending_events = 2;
+  string message = 3;
+}
+
+message ValidationError {
+  string field = 1;
+  string message = 2;
+  string code = 3;
+}
+
+message IngestMetadata {
+  google.protobuf.Timestamp processed_at = 1;
+  string processing_node = 2;
+  google.protobuf.Duration processing_time = 3;
 }
 
 // Analytics Service
 service AnalyticsService {
-  rpc GetAnalyticsSummary(AnalyticsSummaryRequest) returns (AnalyticsSummary);
-  rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
-  rpc GetAnalyticsHealth(HealthRequest) returns (HealthResponse);
+  // Get analytics summary
+  rpc GetAnalyticsSummary(GetAnalyticsSummaryRequest) returns (AnalyticsSummary) {
+    option (google.api.http) = {
+      get: "/v1/analytics/summary"
+    };
+  }
+  
+  // Get time series data
+  rpc GetTimeSeries(GetTimeSeriesRequest) returns (GetTimeSeriesResponse) {
+    option (google.api.http) = {
+      get: "/v1/analytics/timeseries"
+    };
+  }
+  
+  // Get real-time analytics stream
+  rpc GetRealTimeAnalytics(GetRealTimeAnalyticsRequest) returns (stream RealTimeAnalyticsResponse);
+  
+  // Get user analytics
+  rpc GetUserAnalytics(GetUserAnalyticsRequest) returns (GetUserAnalyticsResponse) {
+    option (google.api.http) = {
+      get: "/v1/analytics/users/{user_id}"
+    };
+  }
+  
+  // Get funnel analysis
+  rpc GetFunnelAnalysis(GetFunnelAnalysisRequest) returns (GetFunnelAnalysisResponse) {
+    option (google.api.http) = {
+      post: "/v1/analytics/funnel"
+      body: "*"
+    };
+  }
+  
+  // Health check
+  rpc Health(google.protobuf.Empty) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/v1/analytics/health"
+    };
+  }
 }
 
-message AnalyticsSummaryRequest {
-  int64 from = 1;
-  int64 to = 2;
+message GetAnalyticsSummaryRequest {
+  TimeRange time_range = 1 [(validate.rules).message.required = true];
+  repeated string event_types = 2;
+  map<string, string> filters = 3;
+  string group_by = 4;
 }
 
-message MetricsRequest {
-  string metric_name = 1;
-  int64 from = 2;
-  int64 to = 3;
+message AnalyticsSummary {
+  int64 total_events = 1;
+  int64 unique_users = 2;
+  int64 sessions = 3;
+  map<string, int64> events_by_type = 4;
+  repeated TopMetric top_metrics = 5;
+  google.protobuf.Timestamp last_updated = 6;
+  SummaryMetadata metadata = 7;
+}
+
+message GetTimeSeriesRequest {
+  TimeRange time_range = 1 [(validate.rules).message.required = true];
+  string metric = 2 [(validate.rules).string.min_len = 1];
+  TimeGranularity granularity = 3;
   map<string, string> filters = 4;
+  repeated string group_by = 5;
 }
 
-message MetricsResponse {
+message GetTimeSeriesResponse {
+  repeated TimeSeriesData series = 1;
+  TimeSeriesMetadata metadata = 2;
+}
+
+message GetRealTimeAnalyticsRequest {
+  repeated string event_types = 1;
+  map<string, string> filters = 2;
+  int32 window_seconds = 3;
+}
+
+message RealTimeAnalyticsResponse {
+  repeated RealTimeMetric metrics = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string window_id = 3;
+}
+
+message GetUserAnalyticsRequest {
+  string user_id = 1 [(validate.rules).string.min_len = 1];
+  TimeRange time_range = 2;
+  bool include_sessions = 3;
+  bool include_events = 4;
+}
+
+message GetUserAnalyticsResponse {
+  UserProfile user_profile = 1;
+  repeated UserSession sessions = 2;
+  repeated Event events = 3;
+  UserMetrics metrics = 4;
+}
+
+message GetFunnelAnalysisRequest {
+  repeated FunnelStep steps = 1 [(validate.rules).repeated.min_items = 2];
+  TimeRange time_range = 2 [(validate.rules).message.required = true];
+  map<string, string> filters = 3;
+  google.protobuf.Duration step_timeout = 4;
+}
+
+message GetFunnelAnalysisResponse {
+  repeated FunnelStepResult steps = 1;
+  double overall_conversion_rate = 2;
+  FunnelMetadata metadata = 3;
+}
+
+// Metrics Service
+service MetricsService {
+  // Get metrics
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse) {
+    option (google.api.http) = {
+      get: "/v1/metrics"
+    };
+  }
+  
+  // Stream metrics
+  rpc StreamMetrics(GetMetricsRequest) returns (stream Metric);
+  
+  // Export metrics (Prometheus format)
+  rpc ExportMetrics(ExportMetricsRequest) returns (ExportMetricsResponse) {
+    option (google.api.http) = {
+      get: "/v1/metrics/export"
+    };
+  }
+  
+  // Health check
+  rpc Health(google.protobuf.Empty) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/v1/metrics/health"
+    };
+  }
+}
+
+message GetMetricsRequest {
+  repeated string metric_names = 1;
+  TimeRange time_range = 2;
+  map<string, string> labels = 3;
+  MetricAggregation aggregation = 4;
+}
+
+message GetMetricsResponse {
   repeated Metric metrics = 1;
-  bool success = 2;
-  string message = 3;
+  MetricsMetadata metadata = 2;
 }
 
-// Common messages
-message HealthRequest {}
+message ExportMetricsRequest {
+  string format = 1; // prometheus, json, csv
+  repeated string metric_names = 2;
+  TimeRange time_range = 3;
+}
+
+message ExportMetricsResponse {
+  string data = 1;
+  string content_type = 2;
+  int64 metrics_count = 3;
+}
+
+// ===================== Common Types =====================
+
+message TimeRange {
+  google.protobuf.Timestamp start = 1 [(validate.rules).timestamp.required = true];
+  google.protobuf.Timestamp end = 2 [(validate.rules).timestamp.required = true];
+}
+
+enum TimeGranularity {
+  TIME_GRANULARITY_UNSPECIFIED = 0;
+  TIME_GRANULARITY_MINUTE = 1;
+  TIME_GRANULARITY_HOUR = 2;
+  TIME_GRANULARITY_DAY = 3;
+  TIME_GRANULARITY_WEEK = 4;
+  TIME_GRANULARITY_MONTH = 5;
+}
+
+message TimeSeriesData {
+  google.protobuf.Timestamp timestamp = 1;
+  double value = 2;
+  map<string, string> labels = 3;
+}
+
+message TimeSeriesMetadata {
+  string metric = 1;
+  TimeGranularity granularity = 2;
+  int32 data_points = 3;
+}
+
+message TopMetric {
+  string name = 1;
+  double value = 2;
+  string unit = 3;
+  double change_percentage = 4;
+}
+
+message SummaryMetadata {
+  TimeRange time_range = 1;
+  google.protobuf.Duration processing_time = 2;
+  string cache_status = 3;
+}
+
+message RealTimeMetric {
+  string name = 1;
+  double value = 2;
+  string unit = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  map<string, string> labels = 5;
+}
+
+message UserProfile {
+  string user_id = 1;
+  google.protobuf.Timestamp first_seen = 2;
+  google.protobuf.Timestamp last_seen = 3;
+  int32 total_sessions = 4;
+  int32 total_events = 5;
+  map<string, string> attributes = 6;
+}
+
+message UserSession {
+  string session_id = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+  int32 event_count = 4;
+  google.protobuf.Duration duration = 5;
+  map<string, string> properties = 6;
+}
+
+message UserMetrics {
+  double engagement_score = 1;
+  int32 days_active = 2;
+  double avg_session_duration = 3;
+  int32 total_transactions = 4;
+  double total_revenue = 5;
+}
+
+message FunnelStep {
+  string name = 1;
+  string event_type = 2;
+  map<string, string> filters = 3;
+}
+
+message FunnelStepResult {
+  string name = 1;
+  int64 users = 2;
+  double conversion_rate = 3;
+  google.protobuf.Duration avg_time_to_convert = 4;
+}
+
+message FunnelMetadata {
+  TimeRange time_range = 1;
+  int64 total_users = 2;
+  google.protobuf.Duration processing_time = 3;
+}
+
+enum MetricAggregation {
+  METRIC_AGGREGATION_UNSPECIFIED = 0;
+  METRIC_AGGREGATION_SUM = 1;
+  METRIC_AGGREGATION_AVG = 2;
+  METRIC_AGGREGATION_MIN = 3;
+  METRIC_AGGREGATION_MAX = 4;
+  METRIC_AGGREGATION_COUNT = 5;
+  METRIC_AGGREGATION_P95 = 6;
+  METRIC_AGGREGATION_P99 = 7;
+}
+
+message MetricsMetadata {
+  int32 total_metrics = 1;
+  TimeRange time_range = 2;
+  MetricAggregation aggregation = 3;
+}
 
 message HealthResponse {
   bool healthy = 1;
   string status = 2;
-  int64 timestamp = 3;
+  google.protobuf.Timestamp timestamp = 3;
+  map<string, string> details = 4;
+  repeated ServiceStatus services = 5;
+}
+
+message ServiceStatus {
+  string name = 1;
+  bool healthy = 2;
+  string status = 3;
+  google.protobuf.Duration response_time = 4;
 } 

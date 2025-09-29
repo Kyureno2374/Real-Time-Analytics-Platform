@@ -2,50 +2,32 @@
 
 Микросервисная платформа аналитики в реальном времени, построенная на Go с использованием Apache Kafka, gRPC, Prometheus и Grafana.
 
-## 🏗️ Архитектура
+## ✨ Основные возможности
+
+- **High-Performance gRPC API** - Полнофункциональный gRPC API с поддержкой REST через grpc-gateway
+- **Real-Time Event Processing** - Обработка событий в реальном времени с использованием Apache Kafka
+- **Streaming Support** - Bidirectional streaming для высокопроизводительной передачи данных
+- **Authentication & Authorization** - Встроенная аутентификация через API keys и токены
+- **Comprehensive Analytics** - Агрегация и анализ данных с поддержкой funnel analysis и time series
+- **Validation & Error Handling** - Автоматическая валидация запросов и продвинутая обработка ошибок
+- **Client Library** - Go client library с connection pooling и автоматическими retry
+- **Monitoring & Metrics** - Полная интеграция с Prometheus и Grafana
+- **Request Tracing** - Поддержка request IDs для отслеживания запросов
+- **Health Checks** - Встроенные health checks для всех сервисов
+
+## Архитектура
 
 Платформа состоит из следующих компонентов:
 
-- **Producer Service** - Сервис для отправки событий в Kafka (HTTP + gRPC API)
+- **Event Ingestion Service** - gRPC/REST сервис для приема событий с валидацией и streaming
+- **Analytics Service** - Сервис для запросов агрегированных данных и real-time analytics
+- **Metrics Service** - Экспорт метрик в различных форматах (Prometheus, JSON, CSV)
 - **Consumer Service** - Сервис для обработки потоковых данных из Kafka
-- **Analytics Service** - Сервис агрегации метрик и аналитики
 - **Apache Kafka** - Брокер сообщений для потоковой обработки с партиционированием
 - **Prometheus** - Система мониторинга и сбора метрик
 - **Grafana** - Визуализация дашбордов и метрик
 
-## 📁 Структура проекта
-
-```
-├── api/
-│   └── proto/           # Protobuf определения и сгенерированные файлы
-├── cmd/                 # Точки входа для каждого сервиса
-│   ├── producer/
-│   ├── consumer/
-│   └── analytics/
-├── config/              # Конфигурационные файлы
-│   ├── prometheus/      # Настройки Prometheus
-│   └── grafana/         # Настройки и дашборды Grafana
-├── deployments/         # Kubernetes манифесты
-│   └── kubernetes/
-├── docs/                # Документация
-├── examples/            # Примеры использования
-│   └── client/
-├── internal/            # Внутренние пакеты
-│   ├── kafka/           # Kafka producer/consumer
-│   ├── metrics/         # Prometheus метрики
-│   └── grpc/           # gRPC сервер с middleware
-├── pkg/                 # Публичные пакеты
-│   ├── config/          # Управление конфигурацией
-│   ├── logger/          # Настройка логирования
-│   └── utils/           # Утилитные функции
-├── scripts/             # Вспомогательные скрипты
-└── services/            # Микросервисы
-    ├── producer/        # Producer service
-    ├── consumer/        # Consumer service
-    └── analytics/       # Analytics service
-```
-
-## 🚀 Быстрый старт
+## Быстрый старт
 
 ### Предварительные требования
 - Docker и Docker Compose
@@ -82,6 +64,131 @@
    - Grafana: http://localhost:3000 (admin/admin)
    - Prometheus: http://localhost:9090
 
+## gRPC API
+
+Платформа предоставляет полнофункциональный gRPC API с поддержкой REST через grpc-gateway.
+
+### Быстрый старт с gRPC
+
+#### 1. Установка инструментов для протобуферов
+
+```bash
+make proto-tools
+```
+
+#### 2. Генерация Go кода из proto файлов
+
+```bash
+make proto
+```
+
+#### 3. Использование Go Client Library
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    
+    "github.com/google/uuid"
+    "google.golang.org/protobuf/types/known/timestamppb"
+    
+    pb "real-time-analytics-platform/api/proto"
+    "real-time-analytics-platform/pkg/client"
+)
+
+func main() {
+    // Создать клиент
+    grpcClient, err := client.NewClient(nil, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer grpcClient.Close()
+    
+    // Создать клиент для ingestion
+    eventClient := pb.NewEventIngestionServiceClient(grpcClient.GetConnection())
+    
+    // Отправить событие
+    event := &pb.Event{
+        Id:        uuid.New().String(),
+        UserId:    "user-123",
+        EventType: pb.EventType_EVENT_TYPE_USER,
+        Timestamp: timestamppb.Now(),
+        Source:    "web-app",
+    }
+    
+    ctx := grpcClient.WithAPIKey(context.Background())
+    resp, err := eventClient.IngestEvent(ctx, &pb.IngestEventRequest{
+        Event: event,
+    })
+    
+    if err != nil {
+        log.Fatalf("Failed: %v", err)
+    }
+    
+    log.Printf("Event ingested: %s", resp.EventId)
+}
+```
+
+#### 4. Использование REST API (grpc-gateway)
+
+```bash
+# Отправить событие
+curl -X POST http://localhost:8080/v1/events \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": {
+      "id": "evt-123",
+      "user_id": "user-456",
+      "event_type": "EVENT_TYPE_USER",
+      "timestamp": "2024-01-01T12:00:00Z",
+      "source": "web-app"
+    }
+  }'
+
+# Получить аналитику
+curl -X GET "http://localhost:8080/v1/analytics/summary" \
+  -H "x-api-key: your-api-key"
+```
+
+### Доступные gRPC сервисы
+
+#### EventIngestionService
+- `IngestEvent` - Отправка одного события
+- `IngestEvents` - Batch отправка до 1000 событий
+- `StreamEvents` - Bidirectional streaming для высокой пропускной способности
+- `Health` - Проверка здоровья сервиса
+
+#### AnalyticsService
+- `GetAnalyticsSummary` - Получить агрегированную сводку
+- `GetTimeSeries` - Получить временные ряды
+- `GetRealTimeAnalytics` - Real-time streaming аналитики
+- `GetUserAnalytics` - Аналитика по конкретному пользователю
+- `GetFunnelAnalysis` - Анализ воронки конверсии
+
+#### MetricsService
+- `GetMetrics` - Получить метрики
+- `StreamMetrics` - Streaming метрик в реальном времени
+- `ExportMetrics` - Экспорт в формате Prometheus/JSON/CSV
+
+### Примеры использования
+
+```bash
+# Запустить пример клиента
+go run examples/grpc_client/main.go
+
+# Тестирование с grpcurl
+grpcurl -plaintext localhost:50051 list
+```
+
+### Подробная документация
+
+- [gRPC API Documentation](./docs/GRPC_API.md) - Полная документация API
+- [gRPC Quick Start Guide](./docs/GRPC_QUICKSTART.md) - Руководство по быстрому старту
+- [Client Examples](./examples/grpc_client/) - Примеры использования клиента
+
 ### Тестирование
 
 ```bash
@@ -107,7 +214,7 @@ make generate-data
 make example
 ```
 
-## 📊 API Endpoints
+## API Endpoints
 
 ### Producer Service (port 8081)
 - `POST /events` - Отправка событий (синхронно)
@@ -130,7 +237,7 @@ make example
 - `GET /health` - Проверка здоровья сервиса
 - `GET /metrics` - Prometheus метрики
 
-## 🔧 Управление
+## Управление
 
 ### Основные команды
 ```bash
@@ -152,7 +259,7 @@ make list-topics      # Список топиков
 make kafka-console    # Мониторинг сообщений
 ```
 
-## 📈 Мониторинг и метрики
+## Мониторинг и метрики
 
 ### Prometheus метрики
 - `events_processed_total` - Количество обработанных событий
@@ -166,7 +273,7 @@ make kafka-console    # Мониторинг сообщений
 - Service Health Dashboard - здоровье сервисов
 - Kafka Metrics Dashboard - метрики Kafka
 
-## 🐳 Docker & Kubernetes
+## Docker & Kubernetes
 
 ### Docker Compose
 Для разработки используется `docker-compose.yml` с полной настройкой всех сервисов.
@@ -174,7 +281,7 @@ make kafka-console    # Мониторинг сообщений
 ### Kubernetes
 Готовые манифесты в `deployments/kubernetes/` для production развертывания.
 
-## 🔌 gRPC Services
+## gRPC Services
 
 Все сервисы предоставляют gRPC API на портах 50051-50053:
 
@@ -182,7 +289,7 @@ make kafka-console    # Мониторинг сообщений
 - **ConsumerService** (50052): GetConsumerHealth, GetConsumerStats  
 - **AnalyticsService** (50053): GetAnalyticsSummary, GetMetrics, GetAnalyticsHealth
 
-## 📝 Примеры использования
+## Примеры использования
 
 ### Отправка события через HTTP
 ```bash
@@ -206,7 +313,7 @@ curl -X POST http://localhost:8081/events \
 curl http://localhost:8083/analytics/summary | jq
 ```
 
-## 🛠️ Разработка
+## Разработка
 
 ### Локальная разработка
 ```bash
@@ -229,28 +336,14 @@ go run services/producer/main.go services/producer/handlers.go
 3. Добавьте запрос в Grafana дашборд
 
 ### Best Practices
-- ✅ Следование SOLID принципам дизайна
-- ✅ Comprehensive error handling и логирование
-- ✅ Graceful shutdown для всех сервисов
-- ✅ Health checks и readiness probes
-- ✅ Prometheus метрики для мониторинга
-- ✅ Structured logging с JSON форматом
-- ✅ Партиционирование Kafka по user_id
-- ✅ gRPC interceptors для метрик и логирования
-
-## 📚 Документация
-
-- [API Documentation](docs/API.md) - Подробное описание API
-- [Architecture](docs/ARCHITECTURE.md) - Детали архитектуры системы
-
-## 🤝 Contributing
-
-1. Fork проект
-2. Создайте feature branch
-3. Сделайте изменения
-4. Добавьте тесты
-5. Запустите `make test`
-6. Создайте Pull Request
+-  Следование SOLID принципам дизайна
+-  Comprehensive error handling и логирование
+-  Graceful shutdown для всех сервисов
+-  Health checks и readiness probes
+-  Prometheus метрики для мониторинга
+-  Structured logging с JSON форматом
+-  Партиционирование Kafka по user_id
+-  gRPC interceptors для метрик и логирования
 
 ## 📄 License
 
