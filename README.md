@@ -2,7 +2,7 @@
 
 Микросервисная платформа аналитики в реальном времени, построенная на Go с использованием Apache Kafka, gRPC, Prometheus и Grafana.
 
-## ✨ Основные возможности
+## Основные возможности
 
 - **High-Performance gRPC API** - Полнофункциональный gRPC API с поддержкой REST через grpc-gateway
 - **Real-Time Event Processing** - Обработка событий в реальном времени с использованием Apache Kafka
